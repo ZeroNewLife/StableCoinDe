@@ -49,6 +49,7 @@ contract ZeroEngine is ReentrancyGuard{
     }
 
     function depositCollateralAndMintZero() external {}
+    
 
     function depositCollateral(address addressColateralAddress, uint256 amountCollateral)
         external
@@ -56,7 +57,7 @@ contract ZeroEngine is ReentrancyGuard{
         isAllowedToken(addressColateralAddress)
         nonReentrant
     {
-        
+
     }
 
     function redeemCollateralForZero() external {}
