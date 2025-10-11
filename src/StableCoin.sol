@@ -4,7 +4,6 @@ pragma solidity ^0.8.30;
 import {ERC20Burnable, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-
 /**
  * @title StableCoim
  * @author Zero Web3
@@ -20,8 +19,8 @@ contract StableCoin is ERC20Burnable, Ownable {
     error MastBeMoreThanZero();
 
     constructor() ERC20("ZERO", "Z") Ownable(0xD843CBe0bdeE3E884Fd32cE4942219830D5944DA) {}
-    
-    // Тут у нас происходит сжигание монет 
+
+    // Тут у нас происходит сжигание монет
     function burn(uint256 _amount) public override onlyOwner {
         uint256 balance = balanceOf(msg.sender);
 
@@ -33,7 +32,8 @@ contract StableCoin is ERC20Burnable, Ownable {
         }
         super.burn(_amount);
     }
-    // Как бы логично что тут происходит минт монеток 
+    // Как бы логично что тут происходит минт монеток
+
     function mint(address _to, uint256 _amount) external onlyOwner returns (bool) {
         if (_to == address(0)) {
             revert NotZeroAddress();

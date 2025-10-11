@@ -7,10 +7,9 @@ pragma solidity ^0.8.30;
  */
 import {StableCoin} from "./StableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract ZeroEngine is ReentrancyGuard{
-
-
+contract ZeroEngine is ReentrancyGuard {
     error TokenAddressesAndPriceFeedAddressesAmountsDontMatch();
     error NeedsMoreThanZero();
     error TokenNotAllowed(address token);
@@ -21,8 +20,11 @@ contract ZeroEngine is ReentrancyGuard{
     error HealthFactorOk();
     error HealthFactorNotImproved();
 
+    event collateralDeposited(address indexed user, address indexed tokenCollateral, uint256 amount);
+
     StableCoin private immutable i_zero;
     mapping(address token => address priceFeed) private s_priceFeeds;
+    mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposit;
 
     modifier moreThanZero(uint256 amount) {
         if (amount == 0) {
@@ -49,15 +51,19 @@ contract ZeroEngine is ReentrancyGuard{
     }
 
     function depositCollateralAndMintZero() external {}
-    
 
-    function depositCollateral(address addressColateralAddress, uint256 amountCollateral)
+    function depositCollateral(address tokenColateralAddress, uint256 amountCollateral)
         external
         moreThanZero(amountCollateral)
-        isAllowedToken(addressColateralAddress)
+        isAllowedToken(tokenColateralAddress)
         nonReentrant
     {
-
+        s_collateralDeposit[msg.sender][tokenColateralAddress] += amountCollateral;
+        emit collateralDeposited(msg.sender, tokenColateralAddress, amountCollateral);
+        bool success = IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this), amountCollateral);
+        if (!success) {
+            revert TransferFailed();
+        }
     }
 
     function redeemCollateralForZero() external {}
