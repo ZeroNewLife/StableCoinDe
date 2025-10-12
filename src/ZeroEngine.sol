@@ -10,6 +10,12 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract ZeroEngine is ReentrancyGuard {
+
+
+    ///////////////////
+    // Errors
+    ///////////////////
+
     error TokenAddressesAndPriceFeedAddressesAmountsDontMatch();
     error NeedsMoreThanZero();
     error TokenNotAllowed(address token);
@@ -20,11 +26,23 @@ contract ZeroEngine is ReentrancyGuard {
     error HealthFactorOk();
     error HealthFactorNotImproved();
 
+    ///////////////////
+    // Events
+    ///////////////////
     event collateralDeposited(address indexed user, address indexed tokenCollateral, uint256 amount);
 
+    ///////////////////
+    // State Variables
+    ///////////////////
+
     StableCoin private immutable i_zero;
+
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposit;
+
+    ///////////////////
+    // Modifiers
+    ///////////////////
 
     modifier moreThanZero(uint256 amount) {
         if (amount == 0) {
@@ -40,6 +58,10 @@ contract ZeroEngine is ReentrancyGuard {
         _;
     }
 
+    ///////////////////
+    // Functions
+    ///////////////////
+
     constructor(address[] memory tokenAddresses, address[] memory priceFeedAddresses, address zeroAddress) {
         if (tokenAddresses.length != priceFeedAddresses.length) {
             revert TokenAddressesAndPriceFeedAddressesAmountsDontMatch();
@@ -49,6 +71,12 @@ contract ZeroEngine is ReentrancyGuard {
         }
         i_zero = StableCoin(zeroAddress);
     }
+
+
+
+     ///////////////////
+    // External Functions
+    ///////////////////
 
     function depositCollateralAndMintZero() external {}
 
@@ -77,4 +105,6 @@ contract ZeroEngine is ReentrancyGuard {
     function liquidatte() external {}
 
     function getHealthFactor() external {}
+
+
 }
