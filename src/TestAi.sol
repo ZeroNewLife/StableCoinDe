@@ -2,7 +2,5 @@
 pragma solidity ^0.8.30;
 
 contract testAi {
-    function setup() public {
-        
-    }
+    function setup() public {}
 }

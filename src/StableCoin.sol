@@ -18,7 +18,7 @@ contract StableCoin is ERC20Burnable, Ownable {
     error NotZeroAddress();
     error MastBeMoreThanZero();
 
-    constructor() ERC20("ZERO", "Z") Ownable(0xD843CBe0bdeE3E884Fd32cE4942219830D5944DA) {}
+    constructor() ERC20("ZERO", "Z") Ownable(msg.sender) {}
 
     // Тут у нас происходит сжигание монет
     function burn(uint256 _amount) public override onlyOwner {
