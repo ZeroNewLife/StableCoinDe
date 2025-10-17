@@ -79,10 +79,17 @@ contract ZeroEngine is ReentrancyGuard {
     // External Functions
     ///////////////////
 
-    function depositCollateralAndMintZero() external {}
+    function depositCollateralAndMintZero(
+        address tokenColateralAddress,
+        uint256 amountCollateral,
+        uint256 amountZeroMint
+    ) external {
+        depositCollateral(tokenColateralAddress, amountCollateral);
+        mintZero(amountZeroMint);
+    }
 
     function depositCollateral(address tokenColateralAddress, uint256 amountCollateral)
-        external
+        public
         moreThanZero(amountCollateral)
         isAllowedToken(tokenColateralAddress)
         nonReentrant
@@ -99,7 +106,7 @@ contract ZeroEngine is ReentrancyGuard {
 
     function redeemCollateral() external {}
 
-    function mintZero(uint256 amountMint) external moreThanZero(amountMint) nonReentrant {
+    function mintZero(uint256 amountMint) public moreThanZero(amountMint) nonReentrant {
         s_mintZero[msg.sender] += amountMint;
         _revertHealthFactorIsBroken(msg.sender);
         bool minted = i_zero.mint(msg.sender, amountMint);
@@ -111,6 +118,7 @@ contract ZeroEngine is ReentrancyGuard {
     function burnZero() external {}
 
     function liquidatte() external {}
+
 
     function getHealthFactor() external {}
 
