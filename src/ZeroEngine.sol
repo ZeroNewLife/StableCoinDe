@@ -28,7 +28,9 @@ contract ZeroEngine is ReentrancyGuard {
     ///////////////////
     // Events
     ///////////////////
+
     event collateralDeposited(address indexed user, address indexed tokenCollateral, uint256 amount);
+    event collateralReedemed(address indexed user,address indexed tokenCollateral,uint256 amount);
 
     ///////////////////
     // State Variables
@@ -40,7 +42,9 @@ contract ZeroEngine is ReentrancyGuard {
     uint256 private constant PRECISION = 1e18;
     uint256 private constant LIQUIDATION_THRESHOLD = 50;
     uint256 private constant LIQUIDATION_PRECISION = 100;
-    uint256 private constant MINT_HEALTH_FACTOR = 1;
+    uint256 private constant MINT_HEALTH_FACTOR = 1e18;
+
+    uint256 private constant LIQUIDATION_BONUS=10;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposit;
@@ -96,15 +100,35 @@ contract ZeroEngine is ReentrancyGuard {
     {
         s_collateralDeposit[msg.sender][tokenColateralAddress] += amountCollateral;
         emit collateralDeposited(msg.sender, tokenColateralAddress, amountCollateral);
-        bool success = IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this), amountCollateral);
+        bool success =IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this), amountCollateral);
         if (!success) {
             revert TransferFailed();
         }
     }
 
-    function redeemCollateralForZero() external {}
+    function redeemCollateralForZero(address tokenColateralAddress,uint256 amountCollateral,uint256 zeroBurn) external {
+        burnZero(zeroBurn);
 
-    function redeemCollateral() external {}
+        redeemCollateral(tokenColateralAddress,amountCollateral);
+        
+
+
+    }
+
+    function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral)
+        public
+        moreThanZero(amountCollateral)
+        nonReentrant
+    {
+        s_collateralDeposit[msg.sender][tokenCollateralAddress] -=amountCollateral;
+        emit collateralReedemed(msg.sender,tokenCollateralAddress,amountCollateral);
+        bool success =IERC20(tokenCollateralAddress).transfer(msg.sender,amountCollateral);
+        if(!success){
+            revert TransferFailed();
+        }
+        _revertHealthFactorIsBroken(msg.sender);
+
+    }
 
     function mintZero(uint256 amountMint) public moreThanZero(amountMint) nonReentrant {
         s_mintZero[msg.sender] += amountMint;
@@ -115,10 +139,40 @@ contract ZeroEngine is ReentrancyGuard {
         }
     }
 
-    function burnZero() external {}
+    function burnZero(uint256 amount) public moreThanZero(amount) {
 
-    function liquidatte() external {}
+        s_mintZero[msg.sender] -=amount;
+        bool success=i_zero.transferFrom(msg.sender,address(this),amount);
+        if(!success){
+            revert TransferFailed();
+        }
+        i_zero.burn(amount);
+        _revertHealthFactorIsBroken(msg.sender);
+        
+     }
 
+    function liquidatte(address collateral ,address user ,uint256 debtToCover) external view  moreThanZero(debtToCover){
+
+        uint256 startingUserHealthFactor =_healthFactor(user);
+
+        if(startingUserHealthFactor>=MINT_HEALTH_FACTOR){
+            revert HealthFactorOk();
+        }
+
+        uint256 tokenAmountFromCovered =getTokenAmountFromUsd(collateral,debtToCover);
+
+        uint256 liquidatteBonus=(tokenAmountFromCovered *LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
+
+    }
+
+    function getTokenAmountFromUsd(address token,uint256 amountUsdWei) public view returns(uint256){
+       AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData(); 
+        
+        return (amountUsdWei *PRECISION) / (uint256(price) *ADDITIONAl_FEED_PRECISION);
+           }
+
+    //function burnDsc() external view returns (uint256) {}
 
     function getHealthFactor() external {}
 
@@ -159,7 +213,6 @@ contract ZeroEngine is ReentrancyGuard {
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
-
         // 1 ethereum 1000$
         // чтобы получит нам надо 1000 *1e8
         return ((uint256(price) * ADDITIONAl_FEED_PRECISION) * amount) / PRECISION;
