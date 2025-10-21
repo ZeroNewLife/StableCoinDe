@@ -14,6 +14,7 @@ contract TestZeroEngine is Test {
     DeployZero deploy;
     HelperConfig config;
     address ethUsdPrice;
+    address btcUsdPrice;
     address weth;
 
     uint256 public constant AMOUNT_COLLATERAL = 10 ether;
@@ -23,11 +24,32 @@ contract TestZeroEngine is Test {
     function setUp() public {
         deploy = new DeployZero();
         (stable, engine, config) = deploy.run();
-        (ethUsdPrice,, weth,,) = config.activeNetworkConfig();
+        (ethUsdPrice,btcUsdPrice, weth,,) = config.activeNetworkConfig();
 
         ERC20Mock(weth).mint(USER, STARTING_USER_BALANCE);
     }
+    address[] public tokenAddreses;
+    address[] public priceFeedAddreses;
 
+    function testRevertIfTokenLengthMatchPriceFeed() public {
+        tokenAddreses.push(weth);
+        priceFeedAddreses.push(ethUsdPrice);
+        priceFeedAddreses.push(btcUsdPrice);
+
+        vm.expectRevert(ZeroEngine.TokenAddressesAndPriceFeedAddressesAmountsDontMatch.selector);
+        new ZeroEngine(tokenAddreses,priceFeedAddreses,address(stable));
+
+    }
+
+    function testRevertUnUprovedCollateral () public {
+        ERC20Mock erc=new ERC20Mock("ZERO","ZERO",USER,AMOUNT_COLLATERAL);
+        vm.startPrank(USER);
+        vm.expectRevert(ZeroEngine.NotAllowedToken.selector);
+        engine.depositCollateral(address(erc),AMOUNT_COLLATERAL);
+        vm.stopPrank();
+    }
+
+    
     function testGetUsdValue() public view {
         uint256 ethAmount = 15e18;
 
@@ -37,6 +59,18 @@ contract TestZeroEngine is Test {
 
         assertEq(expectedUsd, actualUsd);
     }
+    function testGetTokenAmountFromUsd() public {
+        uint256 usdAmount =100 ether;
+
+        uint256 expectedEth =0.05 ether;
+
+        uint256 actualEth=engine.getTokenAmountFromUsd(weth,usdAmount);
+
+        assertEq(expectedEth,actualEth);
+    }
+
+
+
 
     function testCollateralRevertDeposited() public {
         vm.startPrank(USER);

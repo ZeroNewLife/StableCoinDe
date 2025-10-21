@@ -30,7 +30,7 @@ contract ZeroEngine is ReentrancyGuard {
     ///////////////////
 
     event collateralDeposited(address indexed user, address indexed tokenCollateral, uint256 amount);
-    event collateralReedemed(address indexed user,address indexed tokenCollateral,uint256 amount);
+    event collateralReedemed(address indexed redeemFrom,address indexed reddemTo ,address token ,uint256 amount);
 
     ///////////////////
     // State Variables
@@ -100,7 +100,7 @@ contract ZeroEngine is ReentrancyGuard {
     {
         s_collateralDeposit[msg.sender][tokenColateralAddress] += amountCollateral;
         emit collateralDeposited(msg.sender, tokenColateralAddress, amountCollateral);
-        bool success =IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this), amountCollateral);
+        bool success =IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this),amountCollateral);
         if (!success) {
             revert TransferFailed();
         }
@@ -114,20 +114,35 @@ contract ZeroEngine is ReentrancyGuard {
 
 
     }
+    function _burnZero(uint256 amountBurnZero ,address onBehalOf,address zeroFrom) private {
+     s_mintZero[onBehalOf] -=amountBurnZero;
+        bool success=i_zero.transferFrom(zeroFrom,address(this),amountBurnZero);
+        if(!success){
+            revert TransferFailed();
+        }
+        i_zero.burn(amountBurnZero);
+    }
+
+        function _reedemCollateral(address tokenCollateralAddress,uint256 amountCollateral,address from ,address to ) private{
+        s_collateralDeposit[from][tokenCollateralAddress] -=amountCollateral;
+        emit collateralReedemed(from,to,tokenCollateralAddress,amountCollateral);
+        bool success =IERC20(tokenCollateralAddress).transfer(to,amountCollateral);
+        if(!success){
+            revert TransferFailed();
+        }
+    }
+
+
 
     function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral)
         public
         moreThanZero(amountCollateral)
         nonReentrant
     {
-        s_collateralDeposit[msg.sender][tokenCollateralAddress] -=amountCollateral;
-        emit collateralReedemed(msg.sender,tokenCollateralAddress,amountCollateral);
-        bool success =IERC20(tokenCollateralAddress).transfer(msg.sender,amountCollateral);
-        if(!success){
-            revert TransferFailed();
-        }
-        _revertHealthFactorIsBroken(msg.sender);
+       _reedemCollateral(tokenCollateralAddress,amountCollateral,msg.sender,msg.sender);
 
+
+        _revertHealthFactorIsBroken(msg.sender);
     }
 
     function mintZero(uint256 amountMint) public moreThanZero(amountMint) nonReentrant {
@@ -141,17 +156,12 @@ contract ZeroEngine is ReentrancyGuard {
 
     function burnZero(uint256 amount) public moreThanZero(amount) {
 
-        s_mintZero[msg.sender] -=amount;
-        bool success=i_zero.transferFrom(msg.sender,address(this),amount);
-        if(!success){
-            revert TransferFailed();
-        }
-        i_zero.burn(amount);
+        _burnZero(amount,msg.sender,msg.sender);
         _revertHealthFactorIsBroken(msg.sender);
         
      }
 
-    function liquidatte(address collateral ,address user ,uint256 debtToCover) external view  moreThanZero(debtToCover){
+    function liquidatte(address tokenCollateralAddress ,address user ,uint256 debtToCover) external   moreThanZero(debtToCover){
 
         uint256 startingUserHealthFactor =_healthFactor(user);
 
@@ -159,9 +169,21 @@ contract ZeroEngine is ReentrancyGuard {
             revert HealthFactorOk();
         }
 
-        uint256 tokenAmountFromCovered =getTokenAmountFromUsd(collateral,debtToCover);
+        uint256 tokenAmountFromCovered =getTokenAmountFromUsd(tokenCollateralAddress,debtToCover);
 
         uint256 liquidatteBonus=(tokenAmountFromCovered *LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
+
+        //uint256 totalCollateralReddem= tokenAmountFromCovered +liquidatteBonus;
+        _reedemCollateral(tokenCollateralAddress,tokenAmountFromCovered+liquidatteBonus,user,msg.sender);
+
+        _burnZero(debtToCover,user,msg.sender);
+
+        uint256 endHealthFactor =_healthFactor(user);
+        if(endHealthFactor<=startingUserHealthFactor){
+            revert HealthFactorNotImproved();
+        }
+
+        _revertHealthFactorIsBroken(msg.sender);
 
     }
 
@@ -219,4 +241,7 @@ contract ZeroEngine is ReentrancyGuard {
         //PRECISION=1e18
         //ADDITIONAl_FEED_PRECISION=1e10
     }
+
+
+  
 }
