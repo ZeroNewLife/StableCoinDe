@@ -24,7 +24,7 @@ contract TestZeroEngine is Test {
     function setUp() public {
         deploy = new DeployZero();
         (stable, engine, config) = deploy.run();
-        (ethUsdPrice,btcUsdPrice, weth,,) = config.activeNetworkConfig();
+        (ethUsdPrice, btcUsdPrice, weth,,) = config.activeNetworkConfig();
 
         ERC20Mock(weth).mint(USER, STARTING_USER_BALANCE);
     }
@@ -37,19 +37,17 @@ contract TestZeroEngine is Test {
         priceFeedAddreses.push(btcUsdPrice);
 
         vm.expectRevert(ZeroEngine.TokenAddressesAndPriceFeedAddressesAmountsDontMatch.selector);
-        new ZeroEngine(tokenAddreses,priceFeedAddreses,address(stable));
-
+        new ZeroEngine(tokenAddreses, priceFeedAddreses, address(stable));
     }
 
-    function testRevertUnUprovedCollateral () public {
-        ERC20Mock erc=new ERC20Mock("ZERO","ZERO",USER,AMOUNT_COLLATERAL);
+    function testRevertUnUprovedCollateral() public {
+        ERC20Mock erc = new ERC20Mock("ZERO", "ZERO", USER, AMOUNT_COLLATERAL);
         vm.startPrank(USER);
         vm.expectRevert(ZeroEngine.NotAllowedToken.selector);
-        engine.depositCollateral(address(erc),AMOUNT_COLLATERAL);
+        engine.depositCollateral(address(erc), AMOUNT_COLLATERAL);
         vm.stopPrank();
     }
 
-    
     function testGetUsdValue() public view {
         uint256 ethAmount = 15e18;
 
@@ -59,18 +57,16 @@ contract TestZeroEngine is Test {
 
         assertEq(expectedUsd, actualUsd);
     }
-    function testGetTokenAmountFromUsd() public {
-        uint256 usdAmount =100 ether;
 
-        uint256 expectedEth =0.05 ether;
+    function testGetTokenAmountFromUsd() public view {
+        uint256 usdAmount = 100 ether;
 
-        uint256 actualEth=engine.getTokenAmountFromUsd(weth,usdAmount);
+        uint256 expectedEth = 0.05 ether;
 
-        assertEq(expectedEth,actualEth);
+        uint256 actualEth = engine.getTokenAmountFromUsd(weth, usdAmount);
+
+        assertEq(expectedEth, actualEth);
     }
-
-
-
 
     function testCollateralRevertDeposited() public {
         vm.startPrank(USER);

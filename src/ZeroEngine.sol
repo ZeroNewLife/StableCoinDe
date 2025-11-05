@@ -30,7 +30,7 @@ contract ZeroEngine is ReentrancyGuard {
     ///////////////////
 
     event collateralDeposited(address indexed user, address indexed tokenCollateral, uint256 amount);
-    event collateralReedemed(address indexed redeemFrom,address indexed reddemTo ,address token ,uint256 amount);
+    event collateralReedemed(address indexed redeemFrom, address indexed reddemTo, address token, uint256 amount);
 
     ///////////////////
     // State Variables
@@ -44,7 +44,7 @@ contract ZeroEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MINT_HEALTH_FACTOR = 1e18;
 
-    uint256 private constant LIQUIDATION_BONUS=10;
+    uint256 private constant LIQUIDATION_BONUS = 10;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposit;
@@ -100,47 +100,46 @@ contract ZeroEngine is ReentrancyGuard {
     {
         s_collateralDeposit[msg.sender][tokenColateralAddress] += amountCollateral;
         emit collateralDeposited(msg.sender, tokenColateralAddress, amountCollateral);
-        bool success =IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this),amountCollateral);
+        bool success = IERC20(tokenColateralAddress).transferFrom(msg.sender, address(this), amountCollateral);
         if (!success) {
             revert TransferFailed();
         }
     }
 
-    function redeemCollateralForZero(address tokenColateralAddress,uint256 amountCollateral,uint256 zeroBurn) external {
+    function redeemCollateralForZero(address tokenColateralAddress, uint256 amountCollateral, uint256 zeroBurn)
+        external
+    {
         burnZero(zeroBurn);
 
-        redeemCollateral(tokenColateralAddress,amountCollateral);
-        
-
-
+        redeemCollateral(tokenColateralAddress, amountCollateral);
     }
-    function _burnZero(uint256 amountBurnZero ,address onBehalOf,address zeroFrom) private {
-     s_mintZero[onBehalOf] -=amountBurnZero;
-        bool success=i_zero.transferFrom(zeroFrom,address(this),amountBurnZero);
-        if(!success){
+
+    function _burnZero(uint256 amountBurnZero, address onBehalOf, address zeroFrom) private {
+        s_mintZero[onBehalOf] -= amountBurnZero;
+        bool success = i_zero.transferFrom(zeroFrom, address(this), amountBurnZero);
+        if (!success) {
             revert TransferFailed();
         }
         i_zero.burn(amountBurnZero);
     }
 
-        function _reedemCollateral(address tokenCollateralAddress,uint256 amountCollateral,address from ,address to ) private{
-        s_collateralDeposit[from][tokenCollateralAddress] -=amountCollateral;
-        emit collateralReedemed(from,to,tokenCollateralAddress,amountCollateral);
-        bool success =IERC20(tokenCollateralAddress).transfer(to,amountCollateral);
-        if(!success){
+    function _reedemCollateral(address tokenCollateralAddress, uint256 amountCollateral, address from, address to)
+        private
+    {
+        s_collateralDeposit[from][tokenCollateralAddress] -= amountCollateral;
+        emit collateralReedemed(from, to, tokenCollateralAddress, amountCollateral);
+        bool success = IERC20(tokenCollateralAddress).transfer(to, amountCollateral);
+        if (!success) {
             revert TransferFailed();
         }
     }
-
-
 
     function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral)
         public
         moreThanZero(amountCollateral)
         nonReentrant
     {
-       _reedemCollateral(tokenCollateralAddress,amountCollateral,msg.sender,msg.sender);
-
+        _reedemCollateral(tokenCollateralAddress, amountCollateral, msg.sender, msg.sender);
 
         _revertHealthFactorIsBroken(msg.sender);
     }
@@ -155,49 +154,57 @@ contract ZeroEngine is ReentrancyGuard {
     }
 
     function burnZero(uint256 amount) public moreThanZero(amount) {
-
-        _burnZero(amount,msg.sender,msg.sender);
+        _burnZero(amount, msg.sender, msg.sender);
         _revertHealthFactorIsBroken(msg.sender);
-        
-     }
+    }
 
-    function liquidatte(address tokenCollateralAddress ,address user ,uint256 debtToCover) external   moreThanZero(debtToCover){
+    function liquidatte(address tokenCollateralAddress, address user, uint256 debtToCover)
+        external
+        moreThanZero(debtToCover)
+    {
+        uint256 startingUserHealthFactor = _healthFactor(user);
 
-        uint256 startingUserHealthFactor =_healthFactor(user);
-
-        if(startingUserHealthFactor>=MINT_HEALTH_FACTOR){
+        if (startingUserHealthFactor >= MINT_HEALTH_FACTOR) {
             revert HealthFactorOk();
         }
 
-        uint256 tokenAmountFromCovered =getTokenAmountFromUsd(tokenCollateralAddress,debtToCover);
+        uint256 tokenAmountFromCovered = getTokenAmountFromUsd(tokenCollateralAddress, debtToCover);
 
-        uint256 liquidatteBonus=(tokenAmountFromCovered *LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
+        uint256 liquidatteBonus = (tokenAmountFromCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
 
         //uint256 totalCollateralReddem= tokenAmountFromCovered +liquidatteBonus;
-        _reedemCollateral(tokenCollateralAddress,tokenAmountFromCovered+liquidatteBonus,user,msg.sender);
+        _reedemCollateral(tokenCollateralAddress, tokenAmountFromCovered + liquidatteBonus, user, msg.sender);
 
-        _burnZero(debtToCover,user,msg.sender);
+        _burnZero(debtToCover, user, msg.sender);
 
-        uint256 endHealthFactor =_healthFactor(user);
-        if(endHealthFactor<=startingUserHealthFactor){
+        uint256 endHealthFactor = _healthFactor(user);
+        if (endHealthFactor <= startingUserHealthFactor) {
             revert HealthFactorNotImproved();
         }
 
         _revertHealthFactorIsBroken(msg.sender);
-
     }
 
-    function getTokenAmountFromUsd(address token,uint256 amountUsdWei) public view returns(uint256){
-       AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
-        (, int256 price,,,) = priceFeed.latestRoundData(); 
-        
-        return (amountUsdWei *PRECISION) / (uint256(price) *ADDITIONAl_FEED_PRECISION);
-           }
+    function getTokenAmountFromUsd(address token, uint256 amountUsdWei) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
 
+        return (amountUsdWei * PRECISION) / (uint256(price) * ADDITIONAl_FEED_PRECISION);
+    }
+
+    function _calculateHealthFactor(
+        uint256 totalZeroMinted,
+        uint256 collateralValueInUsd
+    )
+        internal
+        pure
+        returns (uint256)
+    {
+        if (totalZeroMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        return (collateralAdjustedForThreshold * PRECISION) / totalZeroMinted;
+    }
     //function burnDsc() external view returns (uint256) {}
-
-    function getHealthFactor() external {}
-
     //тут у нас будет мини проверка если сумма юзера упадет ниже чем обычно то будет ликвидация
     function _healthFactor(address user) private view returns (uint256) {
         (uint256 totalZeroMinter, uint256 collateralValueUsd) = _getAccountInformation(user);
@@ -243,5 +250,44 @@ contract ZeroEngine is ReentrancyGuard {
     }
 
 
-  
+
+     function getPrecision() external pure returns (uint256) {
+        return PRECISION;
+    }
+
+    function getAdditionalFeedPrecision() external pure returns (uint256) {
+        return ADDITIONAl_FEED_PRECISION;
+    }
+
+    function getLiquidationThreshold() external pure returns (uint256) {
+        return LIQUIDATION_THRESHOLD;
+    }
+
+    function getLiquidationBonus() external pure returns (uint256) {
+        return LIQUIDATION_BONUS;
+    }
+
+    function getLiquidationPrecision() external pure returns (uint256) {
+        return LIQUIDATION_PRECISION;
+    }
+
+    function getMinHealthFactor() external pure returns (uint256) {
+        return MINT_HEALTH_FACTOR;
+    }
+
+    function getCollateralTokens() external view returns (address[] memory) {
+        return s_collateralTokens;
+    }
+
+    function getDsc() external view returns (address) {
+        return address(i_zero);
+    }
+
+    function getCollateralTokenPriceFeed(address token) external view returns (address) {
+        return s_priceFeeds[token];
+    }
+
+    function getHealthFactor(address user) external view returns (uint256) {
+        return _healthFactor(user);
+    }
 }
