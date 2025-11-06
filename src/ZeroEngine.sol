@@ -9,6 +9,7 @@ import {StableCoin} from "./StableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {OracleLib} from "../script/libreries/OracleLib.sol";
 
 contract ZeroEngine is ReentrancyGuard {
     ///////////////////
@@ -24,6 +25,8 @@ contract ZeroEngine is ReentrancyGuard {
     error MintFailed();
     error HealthFactorOk();
     error HealthFactorNotImproved();
+
+    using OracleLib for AggregatorV3Interface;
 
     ///////////////////
     // Events
@@ -192,10 +195,7 @@ contract ZeroEngine is ReentrancyGuard {
         return (amountUsdWei * PRECISION) / (uint256(price) * ADDITIONAl_FEED_PRECISION);
     }
 
-    function _calculateHealthFactor(
-        uint256 totalZeroMinted,
-        uint256 collateralValueInUsd
-    )
+    function _calculateHealthFactor(uint256 totalZeroMinted, uint256 collateralValueInUsd)
         internal
         pure
         returns (uint256)
@@ -204,6 +204,7 @@ contract ZeroEngine is ReentrancyGuard {
         uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
         return (collateralAdjustedForThreshold * PRECISION) / totalZeroMinted;
     }
+
     //function burnDsc() external view returns (uint256) {}
     //тут у нас будет мини проверка если сумма юзера упадет ниже чем обычно то будет ликвидация
     function _healthFactor(address user) private view returns (uint256) {
@@ -221,6 +222,14 @@ contract ZeroEngine is ReentrancyGuard {
         }
     }
 
+    function getAccountInformation(address user)
+        external
+        view
+        returns (uint256 totalDscMinter, uint256 collateralValueInUsd)
+    {
+        return _getAccountInformation(user);
+    }
+
     function _getAccountInformation(address user)
         private
         view
@@ -231,17 +240,27 @@ contract ZeroEngine is ReentrancyGuard {
     }
 
     function getAccountCollateralValue(address user) public view returns (uint256 totalCollateralValueUsd) {
-        for (uint256 i = 0; s_collateralTokens.length > 0; i++) {
+        for (uint256 i = 0; i < s_collateralTokens.length; i++) {
             address token = s_collateralTokens[i];
             uint256 amount = s_collateralDeposit[user][token];
             totalCollateralValueUsd += getUsdValue(token, amount);
         }
+        //         for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+        //     address token = s_collateralTokens[i];
+        //     uint256 amount = s_collateralDeposit[user][token];
+        //     totalCollateralValueUsd += getUsdValue(token, amount);
+        //    }
+
         return totalCollateralValueUsd;
+    }
+
+    function getCollateralBalanceOfUser(address user, address token) external view returns (uint256) {
+        return s_collateralDeposit[user][token];
     }
 
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
-        (, int256 price,,,) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.staleCheckRoundData();
         // 1 ethereum 1000$
         // чтобы получит нам надо 1000 *1e8
         return ((uint256(price) * ADDITIONAl_FEED_PRECISION) * amount) / PRECISION;
@@ -249,9 +268,7 @@ contract ZeroEngine is ReentrancyGuard {
         //ADDITIONAl_FEED_PRECISION=1e10
     }
 
-
-
-     function getPrecision() external pure returns (uint256) {
+    function getPrecision() external pure returns (uint256) {
         return PRECISION;
     }
 
