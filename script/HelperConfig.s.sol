@@ -14,6 +14,8 @@ contract HelperConfig is Script {
         uint256 deployKey;
     }
 
+    
+
     NetworkConfig public activeNetworkConfig;
     uint8 public constant DECIMALS = 8;
     int256 public constant ETH_USD_PRICE = 2000e8;
